@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>순차적 한글/영어 타자 연습</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --background-color: #ecf0f1;
+            --text-color: #2c3e50;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 90%;
+        }
+        h1 {
+            color: var(--primary-color);
+        }
+        #quote {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+        #author {
+            font-style: italic;
+            color: #7f8c8d;
+            margin-bottom: 1.5rem;
+        }
+        #input {
+            width: 100%;
+            padding: 0.8rem;
+            margin-bottom: 1rem;
+            border: 2px solid var(--primary-color);
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        #start, #languageToggle {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin: 0 0.5rem;
+        }
+        #start:hover, #languageToggle:hover {
+            background-color: #2980b9;
+        }
+        #result, #realtime-stats {
+            margin-top: 1.5rem;
+            font-size: 1.1rem;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+        #progress {
+            width: 0;
+            height: 100%;
+            background-color: var(--secondary-color);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>순차적 한글/영어 타자 연습</h1>
+        <p id="quote" aria-live="polite"></p>
+        <p id="author" aria-live="polite"></p>
+        <input type="text" id="input" placeholder="시작 버튼을 클릭하세요" aria-label="타자 입력창" disabled>
+        <div>
+            <button id="start">시작</button>
+            <button id="languageToggle" disabled>한글/영어 전환</button>
+        </div>
+        <div class="progress-bar">
+            <div id="progress"></div>
+        </div>
+        <section id="realtime-stats" aria-live="polite"></section>
+        <section id="result" aria-live="polite"></section>
+    </main>
+
+    <script>
+        const quotes = [
+            { 
+                korean: "삶이 있는 한 희망은 있다.",
+                english: "Where there's life, there's hope.",
+                author: "키케로 (Cicero)"
+            },
+            { 
+                korean: "산다는 것 그것은 치열한 전투이다.",
+                english: "To live is to fight.",
+                author: "로망 롤랑 (Romain Rolland)"
+            },
+            { 
+                korean: "하루에 3시간을 걸으면 7년 후에 지구를 한바퀴 돌 수 있다.",
+                english: "If you walk three hours a day, in seven years you can walk around the world.",
+                author: "사무엘 존슨 (Samuel Johnson)"
+            },
+            { 
+                korean: "언제나 현재에 집중할 수 있다면 행복할 것이다.",
+                english: "If you can always be present, you will be happy.",
+                author: "파울로 코엘료 (Paulo Coelho)"
+            },
+            { 
+                korean: "진정으로 웃으려면 고통을 참아야 하며, 나아가 고통을 즐길 줄 알아야 한다.",
+                english: "To truly laugh, you must be able to take your pain and play with it.",
+                author: "찰리 채플린 (Charlie Chaplin)"
+            }
+        ];
+
+        const quoteElement = document.getElementById('quote');
+        const authorElement = document.getElementById('author');
+        const inputElement = document.getElementById('input');
+        const startButton = document.getElementById('start');
+        const languageToggleButton = document.getElementById('languageToggle');
+        const resultElement = document.getElementById('result');
+        const progressElement = document.getElementById('progress');
+        const realtimeStatsElement = document.getElementById('realtime-stats');
+
+        let startTime, endTime, currentQuote, timerInterval;
+        let isKorean = true;
+        let isTypingStarted = false;
+
+        function getRandomQuote() {
+            return quotes[Math.floor(Math.random() * quotes.length)];
+        }
+
+        function calculateAccuracy(original, typed) {
+            let correct = 0;
+            for (let i = 0; i < Math.min(original.length, typed.length); i++) {
+                if (original[i] === typed[i]) {
+                    correct++;
+                }
+            }
+            return (correct / original.length) * 100;
+        }
+
+        function calculateWPM(typed, elapsedTime) {
+            const words = typed.trim().split(/\s+/).length;
+            const minutes = elapsedTime / 60000;
+            return words / minutes;
+        }
+
+        function updateProgress() {
+            const currentText = isKorean ? currentQuote.korean : currentQuote.english;
+            const progress = (inputElement.value.length / currentText.length) * 100;
+            progressElement.style.width = `${progress}%`;
+        }
+
+        function updateRealtimeStats() {
+            const elapsedTime = new Date() - startTime;
+            const wpm = calculateWPM(inputElement.value, elapsedTime);
+            const currentText = isKorean ? currentQuote.korean : currentQuote.english;
+            const accuracy = calculateAccuracy(currentText, inputElement.value);
+            realtimeStatsElement.innerHTML = `
+                <p>현재 타자 속도: ${wpm.toFixed(2)} WPM</p>
+                <p>정확도: ${accuracy.toFixed(2)}%</p>
+            `;
+        }
+
+        function startTyping() {
+            currentQuote = getRandomQuote();
+            quoteElement.textContent = currentQuote.korean;
+            authorElement.textContent = `- ${currentQuote.author}`;
+            inputElement.value = '';
+            inputElement.disabled = false;
+            inputElement.placeholder = "한글로 입력하세요... (완료 후 엔터)";
+            inputElement.focus();
+            startTime = new Date();
+            startButton.textContent = '다시 시작';
+            resultElement.textContent = '';
+            progressElement.style.width = '0%';
+            realtimeStatsElement.textContent = '';
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateRealtimeStats, 1000);
+            isTypingStarted = true;
+            isKorean = true;
+            languageToggleButton.disabled = true;
+        }
+
+        function switchToEnglish() {
+            isKorean = false;
+            quoteElement.textContent = currentQuote.english;
+            inputElement.value = '';
+            inputElement.disabled = false;
+            inputElement.placeholder = "Type in English... (Press Enter when done)";
+            inputElement.focus();
+            startTime = new Date();
+            progressElement.style.width = '0%';
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateRealtimeStats, 1000);
+        }
+
+        function endTyping() {
+            clearInterval(timerInterval);
+            endTime = new Date();
+            const elapsedTime = endTime - startTime;
+            const currentText = isKorean ? currentQuote.korean : currentQuote.english;
+            const accuracy = calculateAccuracy(currentText, inputElement.value);
+            const wpm = calculateWPM(inputElement.value, elapsedTime);
+
+            let resultHTML = `
+                <p>최종 정확도: ${accuracy.toFixed(2)}%</p>
+                <p>최종 타자 속도: ${wpm.toFixed(2)} WPM</p>
+                <p>소요 시간: ${(elapsedTime / 1000).toFixed(2)}초</p>
+            `;
+
+            if (isKorean) {
+                resultHTML += '<p>이제 영어로 입력해보세요. "한글/영어 전환" 버튼을 클릭하세요.</p>';
+                languageToggleButton.disabled = false;
+            } else {
+                resultHTML += '<p>한글과 영어 입력이 모두 완료되었습니다. "다시 시작" 버튼을 클릭하여 새로운 문장을 연습하세요.</p>';
+                isTypingStarted = false;
+                startButton.textContent = '다시 시작';
+            }
+
+            resultElement.innerHTML = resultHTML;
+            inputElement.disabled = true;
+            realtimeStatsElement.textContent = '';
+        }
+
+        startButton.addEventListener('click', startTyping);
+
+        languageToggleButton.addEventListener('click', function() {
+            if (isKorean && isTypingStarted) {
+                switchToEnglish();
+                this.disabled = true;
+            }
+        });
+
+        inputElement.addEventListener('input', function() {
+            if (isTypingStarted) {
+                updateProgress();
+                updateRealtimeStats();
+            }
+        });
+
+        inputElement.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && isTypingStarted) {
+                e.preventDefault();
+                endTyping();
+            }
+        });
+
+        // 키보드 접근성 개선
+        startButton.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+
+        languageToggleButton.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    </script>
+</body>
+</html>
